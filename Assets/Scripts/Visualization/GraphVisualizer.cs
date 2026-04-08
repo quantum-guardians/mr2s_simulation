@@ -806,6 +806,78 @@ public class GraphVisualizer : MonoBehaviour
         }
     }
 
+    public float GetRoadSurfaceWorldY(float groundY) =>
+        groundY + roadSurfaceYOffset + roadPavementThickness * 0.5f;
+
+    public float GetStreetWalkHalfWidth() => streetClearWidth * 0.5f * 0.82f;
+
+    public void BuildWalkNetwork(GraphData graph, float groundY, List<WalkSegment> segments, Dictionary<int, List<int>> outgoingByNode)
+    {
+        segments.Clear();
+        outgoingByNode.Clear();
+        if (graph == null || graph.Edges.Count == 0) return;
+
+        void AddOutgoing(int fromNode, int segmentIndex)
+        {
+            if (!outgoingByNode.TryGetValue(fromNode, out var list))
+            {
+                list = new List<int>();
+                outgoingByNode[fromNode] = list;
+            }
+
+            list.Add(segmentIndex);
+        }
+
+        var y = GetRoadSurfaceWorldY(groundY);
+
+        if (graph.Directed)
+        {
+            foreach (var e in graph.Edges)
+            {
+                if (!TryGetEdgeXZSegment(graph, e, out var sa, out var sb, out var len))
+                    continue;
+                var idx = segments.Count;
+                segments.Add(new WalkSegment
+                {
+                    A = new Vector3(sa.x, y, sa.y),
+                    B = new Vector3(sb.x, y, sb.y),
+                    FromNode = e.From,
+                    ToNode = e.To,
+                    Length = len
+                });
+                AddOutgoing(e.From, idx);
+            }
+        }
+        else
+        {
+            foreach (var e in graph.Edges)
+            {
+                if (!TryGetEdgeXZSegment(graph, e, out var sa, out var sb, out var len))
+                    continue;
+                var fwd = new WalkSegment
+                {
+                    A = new Vector3(sa.x, y, sa.y),
+                    B = new Vector3(sb.x, y, sb.y),
+                    FromNode = e.From,
+                    ToNode = e.To,
+                    Length = len
+                };
+                AddOutgoing(e.From, segments.Count);
+                segments.Add(fwd);
+                var rev = new WalkSegment
+                {
+                    A = fwd.B,
+                    B = fwd.A,
+                    FromNode = e.To,
+                    ToNode = e.From,
+                    Length = len
+                };
+                AddOutgoing(e.To, segments.Count);
+                segments.Add(rev);
+            }
+        }
+    }
+
     void LateUpdate()
     {
         if (_activeGraph != null)
