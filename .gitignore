@@ -1,0 +1,63 @@
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Ll]ogs/
+
+# Asset Store tools
+/[Aa]ssets/[Aa]sset[Ss]tore[Tt]ools*
+
+# Plastic SCM plugin
+/[Aa]ssets/[Pp]lugins/PlasticSCM*
+
+# IDE and editor settings
+.vs/
+.vscode/
+.idea/
+.gradle/
+.consulo/
+
+# Visual Studio / Rider generated files
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Unity and build artifacts
+sysinfo.txt
+crashlytics-build.properties
+*.apk
+*.aab
+*.app
+*.unitypackage
+~UnityDirMonSyncFile~*
+
+# Addressables
+**/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+**/[Aa]ssets/[Ss]treaming[Aa]ssets/*/aa/*
+**/[Aa]ssets/[Ss]treaming[Aa]ssets/aa.meta
+
+# OS generated files
+.DS_Store*
+Thumbs.db
+Desktop.ini
+
+# Plastic SCM workspace folder
+.plastic/
