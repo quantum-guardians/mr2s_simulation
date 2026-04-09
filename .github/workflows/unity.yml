@@ -45,7 +45,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: Builds/WebGL
+          path: Builds/WebGL/WebGL
 
       - id: deploy
         uses: actions/deploy-pages@v4
