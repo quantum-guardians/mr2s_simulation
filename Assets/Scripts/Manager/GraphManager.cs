@@ -10,6 +10,8 @@ public class GraphManager : MonoBehaviour
 {
     [SerializeField] GraphVisualizer visualizer;
     [SerializeField] float defaultGroundY;
+    [Tooltip("도로 빌드 후 보행 시뮬 네트워크 갱신 (비우면 생략)")]
+    [SerializeField] PedestrianCrowdSim pedestrianCrowdSim;
 
     [Header("Small-world API")]
     [SerializeField] string smallWorldApiUrl = "https://quantum.yunseong.dev/api/v1/optimize/small-world";
@@ -17,6 +19,7 @@ public class GraphManager : MonoBehaviour
     GraphData _graphData;
 
     public GraphData CurrentGraph => _graphData;
+    public float DefaultGroundY => defaultGroundY;
 
     public bool IsRequestInProgress { get; private set; }
 
@@ -30,6 +33,7 @@ public class GraphManager : MonoBehaviour
 
         data.Directed = false;
         _graphData = data;
+        pedestrianCrowdSim?.ClearAllAgents();
         visualizer.Clear();
         visualizer.BuildFromGraph(_graphData, defaultGroundY);
     }
@@ -67,11 +71,13 @@ public class GraphManager : MonoBehaviour
 
         visualizer.SyncPositionsFromSceneToData(_graphData);
         visualizer.BuildRoads(_graphData, defaultGroundY);
+        pedestrianCrowdSim?.OnRoadsBuilt(_graphData, defaultGroundY);
     }
 
     public void ClearAll()
     {
         _graphData = null;
+        pedestrianCrowdSim?.ClearAllAgents();
         visualizer.Clear();
     }
 
@@ -360,6 +366,7 @@ public class GraphManager : MonoBehaviour
         }
 
         _graphData = result;
+        pedestrianCrowdSim?.ClearAllAgents();
         visualizer.Clear();
         visualizer.BuildFromGraph(_graphData, defaultGroundY);
         IsRequestInProgress = false;
