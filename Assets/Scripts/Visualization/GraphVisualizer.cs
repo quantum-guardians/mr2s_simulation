@@ -21,6 +21,8 @@ public class GraphVisualizer : MonoBehaviour
     [SerializeField] float initialSpread = 4f;
     [SerializeField] float nodeSphereScale = 0.35f;
     [SerializeField] float nodeHeightOffset = 0.2f;
+    [Tooltip("교차하는 간선 쌍에 대한 척력. 0이면 꺼짐. 평면 그래프 배치에 필요")]
+    [SerializeField] float crossingRepulsionStrength = 18f;
 
     [Header("Nodes")]
     [SerializeField] Color nodeColor = new(0.15f, 0.72f, 0.28f, 1f);
@@ -371,17 +373,67 @@ public class GraphVisualizer : MonoBehaviour
         _dragNodeId = null;
     }
 
-    public void BuildFromGraph(GraphData graph, float groundY)
+    public void BuildFromGraph(GraphData graph, float groundY, bool keepExistingPositions = false)
     {
         Clear();
         _activeGraph = graph;
         _fallbackGroundY = groundY;
         RefreshPlaneBounds(groundY);
 
-        foreach (var id in graph.Nodes.Keys)
+        if (keepExistingPositions)
         {
-            var p = RandomNodePositionOnGround();
-            graph.Nodes[id].Position = p;
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minZ = float.MaxValue, maxZ = float.MinValue;
+            foreach (var id in graph.Nodes.Keys)
+            {
+                var p = graph.Nodes[id].Position;
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.z < minZ) minZ = p.z;
+                if (p.z > maxZ) maxZ = p.z;
+            }
+
+            var dataW = maxX - minX;
+            var dataH = maxZ - minZ;
+            var dataCx = (minX + maxX) * 0.5f;
+            var dataCz = (minZ + maxZ) * 0.5f;
+
+            float targetW, targetH, targetCx, targetCz;
+            if (_hasPlaneBounds)
+            {
+                targetW = (_planeMaxX - _planeMinX) * 0.85f;
+                targetH = (_planeMaxZ - _planeMinZ) * 0.85f;
+                targetCx = (_planeMinX + _planeMaxX) * 0.5f;
+                targetCz = (_planeMinZ + _planeMaxZ) * 0.5f;
+            }
+            else
+            {
+                targetW = Mathf.Max(dataW, 14f);
+                targetH = Mathf.Max(dataH, 14f);
+                targetCx = 0f;
+                targetCz = 0f;
+            }
+
+            var scaleX = dataW > 0.01f ? targetW / dataW : 1f;
+            var scaleZ = dataH > 0.01f ? targetH / dataH : 1f;
+            var scale = Mathf.Min(scaleX, scaleZ);
+
+            foreach (var id in graph.Nodes.Keys)
+            {
+                var p = graph.Nodes[id].Position;
+                p.x = (p.x - dataCx) * scale + targetCx;
+                p.z = (p.z - dataCz) * scale + targetCz;
+                p.y = _groundY + nodeHeightOffset;
+                graph.Nodes[id].Position = p;
+            }
+        }
+        else
+        {
+            foreach (var id in graph.Nodes.Keys)
+            {
+                var p = RandomNodePositionOnGround();
+                graph.Nodes[id].Position = p;
+            }
         }
 
         foreach (var kv in graph.Nodes)
@@ -390,8 +442,11 @@ public class GraphVisualizer : MonoBehaviour
         foreach (var edge in graph.Edges)
             SpawnEdgeLine(edge.From, edge.To, graph.Directed);
 
-        for (var i = 0; i < layoutIterations; i++)
-            StepForceLayout(graph, layoutStep);
+        if (!keepExistingPositions)
+        {
+            for (var i = 0; i < layoutIterations; i++)
+                StepForceLayout(graph, layoutStep);
+        }
 
         ApplyDataPositionsToTransforms(graph);
         SyncNodeDataFromTransforms();
@@ -989,6 +1044,47 @@ public class GraphVisualizer : MonoBehaviour
             if (indexOf.TryGetValue(e.To, out var fj)) force[fj] -= fs;
         }
 
+        if (crossingRepulsionStrength > 0f && data.Edges.Count > 1)
+        {
+            var edges = data.Edges;
+            for (var ei = 0; ei < edges.Count; ei++)
+            {
+                var ea = edges[ei];
+                var a = data.Nodes[ea.From].Position; a.y = 0f;
+                var b = data.Nodes[ea.To].Position; b.y = 0f;
+                var ma = new Vector2(a.x, a.z);
+                var mb = new Vector2(b.x, b.z);
+
+                for (var ej = ei + 1; ej < edges.Count; ej++)
+                {
+                    var eb = edges[ej];
+                    if (ea.From == eb.From || ea.From == eb.To || ea.To == eb.From || ea.To == eb.To)
+                        continue;
+
+                    var c = data.Nodes[eb.From].Position; c.y = 0f;
+                    var d = data.Nodes[eb.To].Position; d.y = 0f;
+                    var mc = new Vector2(c.x, c.z);
+                    var md = new Vector2(d.x, d.z);
+
+                    if (!SegmentsIntersect(ma, mb, mc, md)) continue;
+
+                    var mid1 = (ma + mb) * 0.5f;
+                    var mid2 = (mc + md) * 0.5f;
+                    var diff = mid1 - mid2;
+                    var dist = Mathf.Max(diff.magnitude, 0.01f);
+                    var dir = diff / dist;
+                    var fm = dir * (crossingRepulsionStrength / (dist * dist));
+
+                    var f3 = new Vector3(fm.x, 0f, fm.y);
+                    var f3n = -f3;
+                    if (indexOf.TryGetValue(ea.From, out var ai)) force[ai] += f3;
+                    if (indexOf.TryGetValue(ea.To, out var bi)) force[bi] += f3;
+                    if (indexOf.TryGetValue(eb.From, out var ci)) force[ci] += f3n;
+                    if (indexOf.TryGetValue(eb.To, out var di)) force[di] += f3n;
+                }
+            }
+        }
+
         for (var i = 0; i < n; i++)
         {
             var f = force[i];
@@ -998,6 +1094,17 @@ public class GraphVisualizer : MonoBehaviour
             node.Position.y = _groundY + nodeHeightOffset;
             node.Position = ClampPositionToPlaneXZ(node.Position);
         }
+    }
+
+    static bool SegmentsIntersect(Vector2 a, Vector2 b, Vector2 c, Vector2 d)
+    {
+        return Cross2D(a, b, c) * Cross2D(a, b, d) < 0f &&
+               Cross2D(c, d, a) * Cross2D(c, d, b) < 0f;
+    }
+
+    static float Cross2D(Vector2 o, Vector2 a, Vector2 b)
+    {
+        return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
     }
 
     void RefreshPlaneBounds(float fallbackGroundY)

@@ -26,5 +26,4 @@ public class SmallWorldResponseEdgeDto
 {
     public int _from;
     public int to;
-    public float weight;
 }

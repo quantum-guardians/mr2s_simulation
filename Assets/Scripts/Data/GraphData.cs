@@ -32,4 +32,10 @@ public class GraphData
     public bool Directed;
     public Dictionary<int, GraphNodeData> Nodes = new();
     public List<GraphEdgeData> Edges = new();
+
+    public void EnsureNode(int id)
+    {
+        if (!Nodes.ContainsKey(id))
+            Nodes[id] = new GraphNodeData(id, Vector3.zero);
+    }
 }
