@@ -15,6 +15,8 @@ public class GraphManager : MonoBehaviour
 
     GraphData _graphData;
     readonly System.Collections.Generic.List<string> _parseWarnings = new();
+    System.Collections.Generic.Dictionary<int, Vector3> _pendingNodePositions;
+    GraphData _pendingFallbackData;
 
     public GraphData CurrentGraph => _graphData;
     public float DefaultGroundY => defaultGroundY;
@@ -84,17 +86,42 @@ public class GraphManager : MonoBehaviour
 
     public void GeneratePlanarGraph()
     {
+        EnsureApiClient();
+
         var gen = new PlanarGraphGenerator(autoVertexCount, PlanarGraphGenerator.DefaultRemoveRatio);
         var data = gen.Generate();
 
-        _graphData = data;
+        // Store positions before sending to API (API response doesn't include positions).
+        _pendingNodePositions = new System.Collections.Generic.Dictionary<int, Vector3>();
+        foreach (var kv in data.Nodes)
+            _pendingNodePositions[kv.Key] = kv.Value.Position;
+        _pendingFallbackData = data;
+
+        data.Directed = true;
         pedestrianCrowdSim?.ClearAllAgents();
         visualizer.Clear();
-        visualizer.BuildFromGraph(_graphData, defaultGroundY, keepExistingPositions: true);
+
+        if (apiClient != null)
+        {
+            apiClient.SendRequest(data);
+        }
     }
 
     void OnSmallWorldResponse(GraphData result)
     {
+        // Restore node positions from planar generator if available.
+        if (_pendingNodePositions != null)
+        {
+            foreach (var kv in _pendingNodePositions)
+            {
+                if (result.Nodes.TryGetValue(kv.Key, out var node))
+                    node.Position = kv.Value;
+                else
+                    result.Nodes[kv.Key] = new GraphNodeData(kv.Key, kv.Value);
+            }
+            _pendingNodePositions = null;
+        }
+
         _graphData = result;
         pedestrianCrowdSim?.ClearAllAgents();
         visualizer.Clear();
@@ -104,6 +131,16 @@ public class GraphManager : MonoBehaviour
     void OnSmallWorldFailed(string error)
     {
         Debug.LogWarning("[GraphManager] Small-world API 실패: " + error);
+
+        if (_pendingFallbackData != null)
+        {
+            _graphData = _pendingFallbackData;
+            _pendingFallbackData = null;
+            _pendingNodePositions = null;
+            pedestrianCrowdSim?.ClearAllAgents();
+            visualizer.Clear();
+            visualizer.BuildFromGraph(_graphData, defaultGroundY, keepExistingPositions: true);
+        }
     }
 
     void EnsureApiClient()
